@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ResQRelief - Disaster Relief & Resource Management System</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons via CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- System Offline Warning Banner (Shown if backend server disconnects) -->
+  <div id="offline-banner" class="offline-banner hidden">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <span>Backend C++ server is currently unreachable. Make sure the Crow server is running at <code>http://localhost:8080</code>.</span>
+    <button onclick="checkBackendHealth()"><i class="fa-solid fa-rotate"></i> Retry</button>
+  </div>
+
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon"><i class="fa-solid fa-shield-heart"></i></div>
+          <div class="logo-text">
+            <h2>ResQ<span>Relief</span></h2>
+            <span class="badge-cpp">C++ Crow &bull; OOP</span>
+          </div>
+        </div>
+        <button class="mobile-toggle" id="close-sidebar-btn" aria-label="Close Sidebar">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <ul>
+          <li>
+            <a href="#dashboard" class="nav-item active" data-view="dashboard">
+              <i class="fa-solid fa-gauge-high"></i>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li>
+            <a href="#disasters" class="nav-item" data-view="disasters">
+              <i class="fa-solid fa-burst"></i>
+              <span>Disasters</span>
+              <span class="nav-badge" id="disaster-count-badge">0</span>
+            </a>
+          </li>
+          <li>
+            <a href="#inventory" class="nav-item" data-view="inventory">
+              <i class="fa-solid fa-boxes-stacked"></i>
+              <span>Resource Inventory</span>
+              <span class="nav-badge" id="inventory-count-badge">0</span>
+            </a>
+          </li>
+          <li>
+            <a href="#requests" class="nav-item" data-view="requests">
+              <i class="fa-solid fa-hand-holding-hand"></i>
+              <span>Relief Requests</span>
+              <span class="nav-badge badge-warning" id="request-pending-badge">0</span>
+            </a>
+          </li>
+          <li>
+            <a href="#distribution" class="nav-item" data-view="distribution">
+              <i class="fa-solid fa-truck-ramp-box"></i>
+              <span>Distribution</span>
+            </a>
+          </li>
+          <li>
+            <a href="#reports" class="nav-item" data-view="reports">
+              <i class="fa-solid fa-file-waveform"></i>
+              <span>Reports</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="system-status">
+          <span class="status-indicator online" id="status-indicator"></span>
+          <span class="status-label" id="status-label">C++ Server Online</span>
+        </div>
+        <button class="btn btn-sm btn-secondary btn-reseed" onclick="confirmResetData()" title="Re-populate with realistic sample data">
+          <i class="fa-solid fa-rotate-left"></i> Re-seed Sample Data
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Header Bar -->
+      <header class="top-bar">
+        <div class="top-bar-left">
+          <button class="sidebar-toggle-btn" id="open-sidebar-btn" aria-label="Open Sidebar">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="page-title-box">
+            <h1 id="page-title">Disaster Relief Operations Dashboard</h1>
+            <p id="page-subtitle">Real-time incident tracking, relief logistics, and inventory allocation</p>
+          </div>
+        </div>
+
+        <div class="top-bar-right">
+          <div class="live-clock">
+            <i class="fa-regular fa-clock"></i>
+            <span id="current-time">--:--:--</span>
+          </div>
+          <button class="btn btn-emergency" onclick="openNewDisasterModal()">
+            <i class="fa-solid fa-triangle-exclamation"></i> Report Disaster
+          </button>
+          <button class="btn btn-primary" onclick="openAllocateModal()">
+            <i class="fa-solid fa-truck-fast"></i> Quick Allocate
+          </button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <!-- ============================================== -->
+        <!-- VIEW 1: DASHBOARD -->
+        <!-- ============================================== -->
+        <section id="view-dashboard" class="content-view active">
+          <!-- Summary Metric Cards -->
+          <div class="stats-grid">
+            <div class="stat-card border-danger">
+              <div class="stat-icon bg-danger-light text-danger">
+                <i class="fa-solid fa-burst"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Total Disasters</span>
+                <h3 class="stat-value" id="card-total-disasters">0</h3>
+                <span class="stat-subtext text-danger" id="card-active-disasters">0 Active / 0 Critical</span>
+              </div>
+            </div>
+
+            <div class="stat-card border-primary">
+              <div class="stat-icon bg-primary-light text-primary">
+                <i class="fa-solid fa-boxes-stacked"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Available Resources</span>
+                <h3 class="stat-value" id="card-total-stock">0</h3>
+                <span class="stat-subtext" id="card-resource-types">0 distinct categories</span>
+              </div>
+            </div>
+
+            <div class="stat-card border-warning">
+              <div class="stat-icon bg-warning-light text-warning">
+                <i class="fa-solid fa-hand-holding-hand"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Pending Relief Requests</span>
+                <h3 class="stat-value" id="card-pending-requests">0</h3>
+                <span class="stat-subtext text-warning" id="card-total-requests">0 Total Requests</span>
+              </div>
+            </div>
+
+            <div class="stat-card border-success">
+              <div class="stat-icon bg-success-light text-success">
+                <i class="fa-solid fa-truck-ramp-box"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-label">Relief Distributed</span>
+                <h3 class="stat-value" id="card-total-distributions">0</h3>
+                <span class="stat-subtext text-success" id="card-items-distributed">0 items dispatched</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alert / Shortage Notice (if low stock exists) -->
+          <div id="low-stock-alert" class="alert-box alert-warning hidden">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div>
+              <strong>Inventory Warning:</strong> One or more critical resources are running below minimum safety threshold (&lt;50 units).
+              <a href="#inventory" onclick="switchView('inventory')" class="alert-link">Review Inventory &rarr;</a>
+            </div>
+          </div>
+
+          <!-- Dashboard Two Columns -->
+          <div class="dashboard-columns">
+            <!-- Left: Recent Disasters -->
+            <div class="card recent-disasters-card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title"><i class="fa-solid fa-triangle-exclamation text-danger"></i> Recent Disasters</h3>
+                  <p class="card-subtitle">Active and recent critical crisis incidents</p>
+                </div>
+                <button class="btn btn-sm btn-outline" onclick="switchView('disasters')">View All</button>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Disaster</th>
+                        <th>Type</th>
+                        <th>Location</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashboard-disasters-table">
+                      <tr><td colspan="6" class="text-center py-4 text-muted">Loading disasters...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Recent Distribution Activity -->
+            <div class="card recent-distributions-card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title"><i class="fa-solid fa-clock-rotate-left text-primary"></i> Distribution Activity</h3>
+                  <p class="card-subtitle">Latest resource allocations and relief deliveries</p>
+                </div>
+                <button class="btn btn-sm btn-outline" onclick="switchView('distribution')">History</button>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Resource</th>
+                        <th>Destination</th>
+                        <th>Quantity</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashboard-distributions-table">
+                      <tr><td colspan="5" class="text-center py-4 text-muted">Loading recent allocations...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Visual Breakdown Overview -->
+          <div class="overview-chart-section">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title"><i class="fa-solid fa-chart-pie text-secondary"></i> Resource Inventory Breakdown</h3>
+                <span class="text-muted text-sm">Real-time stock by category</span>
+              </div>
+              <div class="card-body" id="dashboard-category-bars">
+                <!-- Dynamically populated category progress bars -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 2: DISASTER MANAGEMENT -->
+        <!-- ============================================== -->
+        <section id="view-disasters" class="content-view">
+          <div class="section-toolbar">
+            <div class="search-filters">
+              <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="disaster-search-input" placeholder="Search disaster name or location...">
+              </div>
+              <select id="disaster-type-filter" class="form-select">
+                <option value="">All Types</option>
+                <option value="Flood">Flood</option>
+                <option value="Cyclone">Cyclone</option>
+                <option value="Earthquake">Earthquake</option>
+                <option value="Landslide">Landslide</option>
+                <option value="Wildfire">Wildfire</option>
+                <option value="Drought">Drought</option>
+                <option value="Tsunami">Tsunami</option>
+              </select>
+              <select id="disaster-severity-filter" class="form-select">
+                <option value="">All Severities</option>
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+            <button class="btn btn-emergency" onclick="openNewDisasterModal()">
+              <i class="fa-solid fa-plus"></i> Add New Disaster
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="data-table" id="disasters-full-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Incident Name</th>
+                      <th>Type</th>
+                      <th>Location</th>
+                      <th>Severity</th>
+                      <th>Incident Date</th>
+                      <th>Status</th>
+                      <th>Description</th>
+                      <th class="text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="disasters-table-body">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 3: RESOURCE INVENTORY -->
+        <!-- ============================================== -->
+        <section id="view-inventory" class="content-view">
+          <div class="section-toolbar">
+            <div class="search-filters">
+              <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="inventory-search-input" placeholder="Search resource name, category, warehouse...">
+              </div>
+              <select id="inventory-category-filter" class="form-select">
+                <option value="">All Categories</option>
+                <option value="Food">Food Packets</option>
+                <option value="Water">Drinking Water</option>
+                <option value="Medical">Medicines & Trauma</option>
+                <option value="Shelter">Blankets & Shelter</option>
+                <option value="Rescue Equipment">Rescue Equipment</option>
+                <option value="Equipment">Power & Logistics</option>
+              </select>
+            </div>
+            <div class="toolbar-actions">
+              <button class="btn btn-primary" onclick="openNewResourceModal()">
+                <i class="fa-solid fa-plus"></i> Add New Resource
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="data-table" id="inventory-full-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Resource Item</th>
+                      <th>Category</th>
+                      <th>Quantity in Stock</th>
+                      <th>Unit</th>
+                      <th>Storage Depot</th>
+                      <th>Stock Level</th>
+                      <th class="text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="inventory-table-body">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 4: RELIEF REQUESTS -->
+        <!-- ============================================== -->
+        <section id="view-requests" class="content-view">
+          <div class="section-toolbar">
+            <div class="search-filters">
+              <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="request-search-input" placeholder="Search requester, resource, or location...">
+              </div>
+              <select id="request-status-filter" class="form-select">
+                <option value="">All Statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+              <select id="request-urgency-filter" class="form-select">
+                <option value="">All Urgencies</option>
+                <option value="Urgent">Urgent</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="openNewRequestModal()">
+              <i class="fa-solid fa-plus"></i> Submit Relief Request
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="data-table" id="requests-full-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Requester</th>
+                      <th>Location</th>
+                      <th>Resource Needed</th>
+                      <th>Quantity</th>
+                      <th>Urgency</th>
+                      <th>Status</th>
+                      <th>Contact Info</th>
+                      <th class="text-right">Status Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="requests-table-body">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 5: RESOURCE DISTRIBUTION -->
+        <!-- ============================================== -->
+        <section id="view-distribution" class="content-view">
+          <div class="distribution-grid">
+            <!-- Left: Allocation Form -->
+            <div class="card">
+              <div class="card-header bg-navy text-white">
+                <h3 class="card-title text-white"><i class="fa-solid fa-truck-fast"></i> Allocate Relief Resources</h3>
+                <p class="card-subtitle text-white-50">Automated inventory validation and dispatch logging</p>
+              </div>
+              <div class="card-body">
+                <form id="distribution-form" onsubmit="handleAllocationSubmit(event)">
+                  <div class="form-group">
+                    <label for="alloc-resource-select">Select Resource Item <span class="required">*</span></label>
+                    <select id="alloc-resource-select" class="form-select" required onchange="handleAllocResourceChange()">
+                      <option value="">-- Choose resource --</option>
+                    </select>
+                    <div id="alloc-stock-feedback" class="stock-feedback">Available Stock: <strong>0 units</strong></div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="alloc-disaster-select">Target Disaster Incident <span class="required">*</span></label>
+                    <select id="alloc-disaster-select" class="form-select" required onchange="handleAllocDisasterChange()">
+                      <option value="">-- Choose disaster incident --</option>
+                    </select>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group col-6">
+                      <label for="alloc-quantity-input">Quantity to Allocate <span class="required">*</span></label>
+                      <input type="number" id="alloc-quantity-input" class="form-input" min="1" required placeholder="e.g. 100" oninput="validateAllocQuantity()">
+                      <span id="alloc-qty-warning" class="error-text hidden">Quantity exceeds available stock!</span>
+                    </div>
+
+                    <div class="form-group col-6">
+                      <label for="alloc-request-select">Fulfill Request (Optional)</label>
+                      <select id="alloc-request-select" class="form-select">
+                        <option value="0">-- Direct Disaster Allocation (No Request) --</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="alloc-destination-input">Specific Delivery Destination / Camp</label>
+                    <input type="text" id="alloc-destination-input" class="form-input" placeholder="e.g. Relief Camp Beta, Sector 4">
+                  </div>
+
+                  <div class="form-group">
+                    <label for="alloc-notes-input">Allocation Notes / Convoy Details</label>
+                    <textarea id="alloc-notes-input" class="form-input" rows="2" placeholder="Driver name, vehicle number, dispatch notes..."></textarea>
+                  </div>
+
+                  <div class="form-actions">
+                    <button type="submit" class="btn btn-emergency btn-block" id="btn-submit-alloc">
+                      <i class="fa-solid fa-paper-plane"></i> Authorize & Dispatch Allocation
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- Right: Distribution History Table -->
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title"><i class="fa-solid fa-list-check"></i> Distribution History Log</h3>
+                  <p class="card-subtitle">Permanent audit trail of all relief consignments</p>
+                </div>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Consignment</th>
+                        <th>Resource & Qty</th>
+                        <th>Target Disaster</th>
+                        <th>Destination</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="distribution-history-table">
+                      <!-- Populated dynamically -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 6: REPORTS & AUDIT -->
+        <!-- ============================================== -->
+        <section id="view-reports" class="content-view">
+          <div class="section-toolbar no-print">
+            <div>
+              <h3>Disaster Relief Operations Summary Report</h3>
+              <p class="text-muted">Generated from persistent SQLite database</p>
+            </div>
+            <div class="toolbar-actions">
+              <button class="btn btn-primary" onclick="window.print()">
+                <i class="fa-solid fa-print"></i> Print Report / Save PDF
+              </button>
+            </div>
+          </div>
+
+          <!-- Printable Report Container -->
+          <div class="report-paper">
+            <div class="report-header">
+              <div class="report-title-block">
+                <h2>DISASTER RELIEF & LOGISTICS MANAGEMENT SYSTEM</h2>
+                <p>Official Relief Operations Incident and Inventory Status Report</p>
+              </div>
+              <div class="report-meta">
+                <div><strong>Generated Date:</strong> <span id="report-gen-date">--</span></div>
+                <div><strong>System Engine:</strong> C++ Crow / SQLite Backend</div>
+              </div>
+            </div>
+
+            <hr class="report-divider">
+
+            <!-- Summary Table -->
+            <h4>1. Executive Summary</h4>
+            <div class="report-stat-boxes">
+              <div class="report-stat-box">
+                <span class="lbl">Total Incidents</span>
+                <span class="val" id="rep-total-disasters">0</span>
+              </div>
+              <div class="report-stat-box">
+                <span class="lbl">Active Crises</span>
+                <span class="val text-danger" id="rep-active-disasters">0</span>
+              </div>
+              <div class="report-stat-box">
+                <span class="lbl">Available Inventory</span>
+                <span class="val" id="rep-total-stock">0</span>
+              </div>
+              <div class="report-stat-box">
+                <span class="lbl">Pending Requests</span>
+                <span class="val text-warning" id="rep-pending-requests">0</span>
+              </div>
+              <div class="report-stat-box">
+                <span class="lbl">Units Dispatched</span>
+                <span class="val text-success" id="rep-units-dispatched">0</span>
+              </div>
+            </div>
+
+            <!-- Breakdown Tables -->
+            <div class="report-section">
+              <h4>2. Disaster Incidents Audit</h4>
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Location</th>
+                    <th>Severity</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="report-disasters-tbody"></tbody>
+              </table>
+            </div>
+
+            <div class="report-section">
+              <h4>3. Current Inventory Balances</h4>
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>Item Name</th>
+                    <th>Category</th>
+                    <th>Available Stock</th>
+                    <th>Unit</th>
+                    <th>Storage Facility</th>
+                  </tr>
+                </thead>
+                <tbody id="report-resources-tbody"></tbody>
+              </table>
+            </div>
+
+            <div class="report-section">
+              <h4>4. Dispatched Consignments History</h4>
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Resource</th>
+                    <th>Dispatched Qty</th>
+                    <th>Target Disaster</th>
+                    <th>Destination</th>
+                    <th>Dispatch Date</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="report-distributions-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL: ADD / EDIT DISASTER -->
+  <!-- ============================================== -->
+  <div class="modal-backdrop hidden" id="disaster-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="disaster-modal-title"><i class="fa-solid fa-burst text-danger"></i> Report New Disaster</h3>
+        <button class="modal-close-btn" onclick="closeDisasterModal()">&times;</button>
+      </div>
+      <form id="disaster-form" onsubmit="handleDisasterSubmit(event)">
+        <input type="hidden" id="disaster-id-input" value="">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="disaster-name">Incident Name <span class="required">*</span></label>
+            <input type="text" id="disaster-name" class="form-input" required placeholder="e.g. Northern Flash Floods">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="disaster-type">Disaster Type <span class="required">*</span></label>
+              <select id="disaster-type" class="form-select" required>
+                <option value="Flood">Flood</option>
+                <option value="Cyclone">Cyclone</option>
+                <option value="Earthquake">Earthquake</option>
+                <option value="Landslide">Landslide</option>
+                <option value="Wildfire">Wildfire</option>
+                <option value="Drought">Drought</option>
+                <option value="Tsunami">Tsunami</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group col-6">
+              <label for="disaster-severity">Severity Level <span class="required">*</span></label>
+              <select id="disaster-severity" class="form-select" required>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="disaster-location">Location / Region <span class="required">*</span></label>
+              <input type="text" id="disaster-location" class="form-input" required placeholder="e.g. River Basin District">
+            </div>
+            <div class="form-group col-6">
+              <label for="disaster-date">Date of Incident <span class="required">*</span></label>
+              <input type="date" id="disaster-date" class="form-input" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="disaster-status">Status</label>
+            <select id="disaster-status" class="form-select">
+              <option value="Active">Active</option>
+              <option value="Contained">Contained</option>
+              <option value="Resolved">Resolved</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="disaster-desc">Incident Description & Casualties</label>
+            <textarea id="disaster-desc" class="form-input" rows="3" placeholder="Provide background, estimated impact, affected areas..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeDisasterModal()">Cancel</button>
+          <button type="submit" class="btn btn-emergency" id="disaster-submit-btn">Save Disaster</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL: ADD / EDIT RESOURCE -->
+  <!-- ============================================== -->
+  <div class="modal-backdrop hidden" id="resource-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="resource-modal-title"><i class="fa-solid fa-boxes-stacked text-primary"></i> Add Inventory Resource</h3>
+        <button class="modal-close-btn" onclick="closeResourceModal()">&times;</button>
+      </div>
+      <form id="resource-form" onsubmit="handleResourceSubmit(event)">
+        <input type="hidden" id="resource-id-input" value="">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="resource-name">Resource Name <span class="required">*</span></label>
+            <input type="text" id="resource-name" class="form-input" required placeholder="e.g. Purified Drinking Water">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="resource-category">Category <span class="required">*</span></label>
+              <select id="resource-category" class="form-select" required>
+                <option value="Food">Food Packets</option>
+                <option value="Water">Drinking Water</option>
+                <option value="Medical">Medical / First Aid</option>
+                <option value="Shelter">Shelter & Blankets</option>
+                <option value="Rescue Equipment">Rescue Equipment</option>
+                <option value="Equipment">Power / Logistics</option>
+                <option value="Clothing">Clothing</option>
+              </select>
+            </div>
+            <div class="form-group col-6">
+              <label for="resource-unit">Measurement Unit <span class="required">*</span></label>
+              <input type="text" id="resource-unit" class="form-input" required placeholder="e.g. liters, packets, kits, boxes">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="resource-quantity">Initial / Current Stock <span class="required">*</span></label>
+              <input type="number" id="resource-quantity" class="form-input" min="0" required placeholder="0">
+              <small class="text-muted">Must be 0 or positive integer</small>
+            </div>
+            <div class="form-group col-6">
+              <label for="resource-storage">Storage Facility / Depot <span class="required">*</span></label>
+              <input type="text" id="resource-storage" class="form-input" required placeholder="e.g. Central Warehouse A">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeResourceModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="resource-submit-btn">Save Resource</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL: ADD RELIEF REQUEST -->
+  <!-- ============================================== -->
+  <div class="modal-backdrop hidden" id="request-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-hand-holding-hand text-warning"></i> Submit Relief Request</h3>
+        <button class="modal-close-btn" onclick="closeRequestModal()">&times;</button>
+      </div>
+      <form id="request-form" onsubmit="handleRequestSubmit(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="req-requester">Requester / Agency Name <span class="required">*</span></label>
+            <input type="text" id="req-requester" class="form-input" required placeholder="e.g. Dr. Sarah (Camp 4)">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="req-resource">Required Resource <span class="required">*</span></label>
+              <input type="text" id="req-resource" class="form-input" required placeholder="e.g. First Aid & Trauma Kits">
+            </div>
+            <div class="form-group col-6">
+              <label for="req-quantity">Quantity Needed <span class="required">*</span></label>
+              <input type="number" id="req-quantity" class="form-input" min="1" required placeholder="e.g. 50">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="req-location">Destination Location <span class="required">*</span></label>
+              <input type="text" id="req-location" class="form-input" required placeholder="e.g. River Basin Sector 2">
+            </div>
+            <div class="form-group col-6">
+              <label for="req-urgency">Urgency Level <span class="required">*</span></label>
+              <select id="req-urgency" class="form-select" required>
+                <option value="Urgent">Urgent (Immediate Danger)</option>
+                <option value="High">High</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="req-contact">Contact Info / Radio Channel</label>
+            <input type="text" id="req-contact" class="form-input" placeholder="e.g. +91 98765 43210 or VHF 156.8 MHz">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeRequestModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL: CONFIRM DELETION -->
+  <!-- ============================================== -->
+  <div class="modal-backdrop hidden" id="delete-modal">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <h3 class="text-danger"><i class="fa-solid fa-triangle-exclamation"></i> Confirm Deletion</h3>
+        <button class="modal-close-btn" onclick="closeDeleteModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="delete-modal-msg">Are you sure you want to delete this record? This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirm-delete-btn">Delete Permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
